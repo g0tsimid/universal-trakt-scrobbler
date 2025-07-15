@@ -77,8 +77,10 @@ class _ScriptInjector {
 		);
 		if (shouldInject && !browser.tabs.onUpdated.hasListener(this.onTabUpdated)) {
 			browser.tabs.onUpdated.addListener(this.onTabUpdated);
+			browser.tabs.onRemoved.addListener(this.onTabRemoved);
 		} else if (!shouldInject && browser.tabs.onUpdated.hasListener(this.onTabUpdated)) {
 			browser.tabs.onUpdated.removeListener(this.onTabUpdated);
+			browser.tabs.onRemoved.removeListener(this.onTabRemoved);
 		}
 	}
 
@@ -89,6 +91,22 @@ class _ScriptInjector {
 	) => {
 		void this.injectContentScript(changeInfo, tab);
 	};
+
+	onTabRemoved = (tabId: number, removeInfo: browser.Tabs.OnRemovedRemoveInfoType) => {
+		void this.disconnectContentScript(tabId);
+	};
+
+	async disconnectContentScript(tabId: number): Promise<void> {
+		const values = await SessionStorage.get('injectedContentScriptTabs');
+		const injectedContentScriptTabs = new Set(values.injectedContentScriptTabs ?? []);
+		if (injectedContentScriptTabs.has(tabId)) {
+			void Shared.events.dispatch('CONTENT_SCRIPT_DISCONNECT', null, { tabId });
+			injectedContentScriptTabs.delete(tabId);
+			await SessionStorage.set({
+				injectedContentScriptTabs: Array.from(injectedContentScriptTabs),
+			});
+		}
+	}
 
 	async injectContentScript(
 		changeInfo: WebExtTabs.OnUpdatedChangeInfoType,
